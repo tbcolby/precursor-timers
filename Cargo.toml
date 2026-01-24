@@ -1,0 +1,21 @@
+[package]
+name = "timers"
+version = "0.1.0"
+authors = ["Tyler Colby"]
+edition = "2021"
+description = "Unified timer suite: Pomodoro, Stopwatch, and Countdown timers"
+
+[dependencies]
+xous = "0.9.69"
+xous-ipc = "0.10.9"
+log = "0.4.14"
+log-server = { package = "xous-api-log", version = "0.1.68" }
+xous-names = { package = "xous-api-names", version = "0.9.70" }
+ticktimer-server = { package = "xous-api-ticktimer", version = "0.9.68" }
+gam = { path = "../../services/gam" }
+pddb = { path = "../../services/pddb" }
+modals = { path = "../../services/modals" }
+llio = { path = "../../services/llio" }
+num-derive = { version = "0.4.2", default-features = false }
+num-traits = { version = "0.2.14", default-features = false }
+timer-core = { path = "timer-core" }

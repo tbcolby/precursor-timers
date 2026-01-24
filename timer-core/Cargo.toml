@@ -1,0 +1,8 @@
+[package]
+name = "timer-core"
+version = "0.1.0"
+edition = "2021"
+description = "Pure timing logic library for the Timers app"
+
+[dependencies]
+# None - pure Rust, no platform deps
