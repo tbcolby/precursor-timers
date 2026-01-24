@@ -20,6 +20,12 @@ use crate::storage::TimerStorage;
 const SERVER_NAME: &str = "_Timers_";
 const APP_NAME: &str = "Timers";
 
+// F-key character codes from Xous keyboard service
+const KEY_F1: char = '\u{0011}';
+const KEY_F2: char = '\u{0012}';
+const KEY_F3: char = '\u{0013}';
+const KEY_F4: char = '\u{0014}';
+
 #[derive(Debug, num_derive::FromPrimitive, num_derive::ToPrimitive)]
 enum AppOp {
     Redraw = 0,
@@ -62,6 +68,11 @@ struct TimersApp {
     pump_conn: xous::CID,
     pump_running: bool,
     allow_redraw: bool,
+    // Menu overlay state
+    menu_visible: bool,
+    menu_cursor: usize,
+    help_visible: bool,
+    confirm_exit: bool,
 }
 
 impl TimersApp {
@@ -123,6 +134,10 @@ impl TimersApp {
             pump_conn,
             pump_running: false,
             allow_redraw: true,
+            menu_visible: false,
+            menu_cursor: 0,
+            help_visible: false,
+            confirm_exit: false,
         }
     }
 
@@ -134,6 +149,20 @@ impl TimersApp {
         if !self.allow_redraw {
             return;
         }
+
+        if self.help_visible {
+            ui::draw_help(&self.gam, self.content, self.screensize, self.help_text());
+            return;
+        }
+        if self.confirm_exit {
+            ui::draw_confirm_exit(&self.gam, self.content, self.screensize);
+            return;
+        }
+        if self.menu_visible {
+            ui::draw_menu(&self.gam, self.content, self.screensize, self.menu_items(), self.menu_cursor);
+            return;
+        }
+
         let now = self.now_ms();
         match self.mode {
             AppMode::ModeSelect => {
@@ -217,6 +246,66 @@ impl TimersApp {
     }
 
     fn handle_key(&mut self, key: char) {
+        // F-keys always processed first
+        match key {
+            KEY_F1 => { self.toggle_menu(); return; }
+            KEY_F4 => { self.handle_f4(); return; }
+            KEY_F2 => { self.handle_f2(); return; }
+            KEY_F3 => { self.handle_f3(); return; }
+            _ => {}
+        }
+
+        // If help screen is showing, any key dismisses it
+        if self.help_visible {
+            self.help_visible = false;
+            self.redraw();
+            return;
+        }
+
+        // If confirm exit dialog is showing
+        if self.confirm_exit {
+            match key {
+                'y' => {
+                    // Stop timers and exit
+                    self.stop_all_timers();
+                    self.confirm_exit = false;
+                    self.mode = AppMode::ModeSelect;
+                    self.redraw();
+                }
+                'n' => {
+                    self.confirm_exit = false;
+                    self.redraw();
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        // If menu is open, handle menu navigation only
+        if self.menu_visible {
+            match key {
+                '↑' | 'k' => {
+                    if self.menu_cursor > 0 {
+                        self.menu_cursor -= 1;
+                        self.redraw();
+                    }
+                }
+                '↓' | 'j' => {
+                    let items = self.menu_items();
+                    if self.menu_cursor + 1 < items.len() {
+                        self.menu_cursor += 1;
+                        self.redraw();
+                    }
+                }
+                '\r' | '\n' => {
+                    self.menu_select_item();
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        // Normal mode-specific key handling
         match self.mode.clone() {
             AppMode::ModeSelect => self.handle_key_mode_select(key),
             AppMode::Pomodoro => self.handle_key_pomodoro(key),
@@ -224,6 +313,377 @@ impl TimersApp {
             AppMode::CountdownList => self.handle_key_countdown_list(key),
             AppMode::CountdownRun => self.handle_key_countdown_run(key),
             AppMode::Settings => self.handle_key_settings(key),
+        }
+    }
+
+    fn any_timer_running(&self) -> bool {
+        self.pomodoro.timer.state == TimerState::Running
+            || self.stopwatch.timer.state == TimerState::Running
+            || self.countdown.active_timer.as_ref()
+                .map(|t| t.state == TimerState::Running)
+                .unwrap_or(false)
+    }
+
+    fn stop_all_timers(&mut self) {
+        let now = self.now_ms();
+        if self.pomodoro.timer.state == TimerState::Running {
+            self.pomodoro.timer.pause(now);
+        }
+        if self.stopwatch.timer.state == TimerState::Running {
+            self.stopwatch.timer.pause(now);
+        }
+        if let Some(timer) = &mut self.countdown.active_timer {
+            if timer.state == TimerState::Running {
+                timer.pause(now);
+            }
+        }
+        self.stop_pump();
+    }
+
+    fn menu_items(&self) -> &'static [&'static str] {
+        match self.mode {
+            AppMode::ModeSelect => &["Help", "Settings"],
+            AppMode::Pomodoro => &["Help", "Start/Pause", "Reset", "Settings"],
+            AppMode::Stopwatch => &["Help", "Start/Pause", "Lap", "Reset"],
+            AppMode::CountdownList => &["Help", "New Timer", "Delete", "Settings"],
+            AppMode::CountdownRun => &["Help", "Pause/Resume", "Reset", "Back"],
+            AppMode::Settings => &["Help", "Back"],
+        }
+    }
+
+    fn toggle_menu(&mut self) {
+        if self.help_visible {
+            self.help_visible = false;
+            self.redraw();
+            return;
+        }
+        if self.confirm_exit {
+            return;
+        }
+        self.menu_visible = !self.menu_visible;
+        self.menu_cursor = 0;
+        self.redraw();
+    }
+
+    fn menu_select_item(&mut self) {
+        self.menu_visible = false;
+
+        match self.mode {
+            AppMode::ModeSelect => {
+                match self.menu_cursor {
+                    0 => { self.help_visible = true; }
+                    1 => {
+                        self.mode = AppMode::Settings;
+                        self.settings_cursor = 0;
+                    }
+                    _ => {}
+                }
+            }
+            AppMode::Pomodoro => {
+                match self.menu_cursor {
+                    0 => { self.help_visible = true; }
+                    1 => {
+                        // Start/Pause - same as Enter
+                        let now = self.now_ms();
+                        match self.pomodoro.timer.state {
+                            TimerState::Stopped | TimerState::Paused => {
+                                self.pomodoro.timer.start(now);
+                                self.start_pump(1000);
+                            }
+                            TimerState::Running => {
+                                self.pomodoro.timer.pause(now);
+                                self.stop_pump();
+                            }
+                            _ => {}
+                        }
+                    }
+                    2 => {
+                        self.pomodoro.reset();
+                        self.stop_pump();
+                    }
+                    3 => {
+                        self.mode = AppMode::Settings;
+                        self.settings_cursor = 0;
+                    }
+                    _ => {}
+                }
+            }
+            AppMode::Stopwatch => {
+                match self.menu_cursor {
+                    0 => { self.help_visible = true; }
+                    1 => {
+                        let now = self.now_ms();
+                        match self.stopwatch.timer.state {
+                            TimerState::Stopped | TimerState::Paused => {
+                                self.stopwatch.timer.start(now);
+                                self.start_pump(100);
+                            }
+                            TimerState::Running => {
+                                self.stopwatch.timer.pause(now);
+                                self.stop_pump();
+                            }
+                            _ => {}
+                        }
+                    }
+                    2 => {
+                        let now = self.now_ms();
+                        if self.stopwatch.timer.state == TimerState::Running {
+                            self.stopwatch.record_lap(now);
+                        }
+                    }
+                    3 => {
+                        if self.stopwatch.timer.state != TimerState::Running {
+                            self.stopwatch.reset();
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            AppMode::CountdownList => {
+                match self.menu_cursor {
+                    0 => { self.help_visible = true; }
+                    1 => {
+                        self.menu_visible = false;
+                        self.redraw();
+                        self.create_new_countdown();
+                        return;
+                    }
+                    2 => {
+                        if !self.countdown.entries.is_empty() {
+                            self.countdown.delete_selected();
+                            self.storage.save_countdowns(&self.countdown.entries);
+                        }
+                    }
+                    3 => {
+                        self.mode = AppMode::Settings;
+                        self.settings_cursor = 0;
+                    }
+                    _ => {}
+                }
+            }
+            AppMode::CountdownRun => {
+                match self.menu_cursor {
+                    0 => { self.help_visible = true; }
+                    1 => {
+                        let now = self.now_ms();
+                        let action = if let Some(timer) = &mut self.countdown.active_timer {
+                            match timer.state {
+                                TimerState::Running => { timer.pause(now); Some(false) }
+                                TimerState::Paused => { timer.start(now); Some(true) }
+                                _ => None,
+                            }
+                        } else { None };
+                        match action {
+                            Some(true) => self.start_pump(1000),
+                            Some(false) => self.stop_pump(),
+                            None => {}
+                        }
+                    }
+                    2 => {
+                        self.countdown.start_selected();
+                        self.stop_pump();
+                    }
+                    3 => {
+                        self.countdown.stop_active();
+                        self.stop_pump();
+                        self.mode = AppMode::CountdownList;
+                    }
+                    _ => {}
+                }
+            }
+            AppMode::Settings => {
+                match self.menu_cursor {
+                    0 => { self.help_visible = true; }
+                    1 => { self.mode = AppMode::ModeSelect; }
+                    _ => {}
+                }
+            }
+        }
+        self.redraw();
+    }
+
+    fn handle_f2(&mut self) {
+        if self.help_visible { self.help_visible = false; self.redraw(); return; }
+        if self.confirm_exit { return; }
+        if self.menu_visible { self.menu_visible = false; }
+        // F2 = Start/Stop (same as Enter in timer modes)
+        let now = self.now_ms();
+        match self.mode {
+            AppMode::Pomodoro => {
+                match self.pomodoro.timer.state {
+                    TimerState::Stopped | TimerState::Paused => {
+                        self.pomodoro.timer.start(now);
+                        self.start_pump(1000);
+                    }
+                    TimerState::Running => {
+                        self.pomodoro.timer.pause(now);
+                        self.stop_pump();
+                    }
+                    _ => {}
+                }
+            }
+            AppMode::Stopwatch => {
+                match self.stopwatch.timer.state {
+                    TimerState::Stopped | TimerState::Paused => {
+                        self.stopwatch.timer.start(now);
+                        self.start_pump(100);
+                    }
+                    TimerState::Running => {
+                        self.stopwatch.timer.pause(now);
+                        self.stop_pump();
+                    }
+                    _ => {}
+                }
+            }
+            AppMode::CountdownRun => {
+                let action = if let Some(timer) = &mut self.countdown.active_timer {
+                    match timer.state {
+                        TimerState::Running => { timer.pause(now); Some(false) }
+                        TimerState::Paused => { timer.start(now); Some(true) }
+                        _ => None,
+                    }
+                } else { None };
+                match action {
+                    Some(true) => self.start_pump(1000),
+                    Some(false) => self.stop_pump(),
+                    None => {}
+                }
+            }
+            _ => {}
+        }
+        self.redraw();
+    }
+
+    fn handle_f3(&mut self) {
+        if self.help_visible { self.help_visible = false; self.redraw(); return; }
+        if self.confirm_exit { return; }
+        if self.menu_visible { self.menu_visible = false; }
+        // F3 = Reset (same as 'r')
+        match self.mode {
+            AppMode::Pomodoro => {
+                self.pomodoro.reset();
+                self.stop_pump();
+            }
+            AppMode::Stopwatch => {
+                if self.stopwatch.timer.state != TimerState::Running {
+                    self.stopwatch.reset();
+                }
+            }
+            AppMode::CountdownRun => {
+                self.countdown.start_selected();
+                self.stop_pump();
+            }
+            _ => {}
+        }
+        self.redraw();
+    }
+
+    fn handle_f4(&mut self) {
+        // F4 closes help/menu/confirm first
+        if self.help_visible {
+            self.help_visible = false;
+            self.redraw();
+            return;
+        }
+        if self.menu_visible {
+            self.menu_visible = false;
+            self.redraw();
+            return;
+        }
+        if self.confirm_exit {
+            self.confirm_exit = false;
+            self.redraw();
+            return;
+        }
+        // F4 = Back/Exit
+        match self.mode {
+            AppMode::Pomodoro | AppMode::Stopwatch | AppMode::CountdownList => {
+                if self.any_timer_running() {
+                    self.confirm_exit = true;
+                    self.redraw();
+                } else {
+                    self.mode = AppMode::ModeSelect;
+                    self.redraw();
+                }
+            }
+            AppMode::CountdownRun => {
+                self.countdown.stop_active();
+                self.stop_pump();
+                self.mode = AppMode::CountdownList;
+                self.redraw();
+            }
+            AppMode::Settings => {
+                self.mode = AppMode::ModeSelect;
+                self.redraw();
+            }
+            AppMode::ModeSelect => {
+                // Top level - quit
+            }
+        }
+    }
+
+    fn help_text(&self) -> &'static str {
+        match self.mode {
+            AppMode::ModeSelect => {
+                "TIMERS HELP\n\n\
+                 F1     Menu\n\
+                 F4     Quit\n\n\
+                 Up/Dn  Move cursor\n\
+                 Enter  Open mode\n\
+                 s      Settings\n\
+                 q      Quit"
+            }
+            AppMode::Pomodoro => {
+                "POMODORO HELP\n\n\
+                 F1     Menu\n\
+                 F2     Start/Pause\n\
+                 F3     Reset\n\
+                 F4     Back\n\n\
+                 Enter  Start/Pause\n\
+                 r      Reset\n\
+                 s      Settings\n\
+                 q      Back"
+            }
+            AppMode::Stopwatch => {
+                "STOPWATCH HELP\n\n\
+                 F1     Menu\n\
+                 F2     Start/Pause\n\
+                 F3     Reset\n\
+                 F4     Back\n\n\
+                 Enter  Start/Pause\n\
+                 l      Record lap\n\
+                 r      Reset (stopped)\n\
+                 q      Back"
+            }
+            AppMode::CountdownList => {
+                "COUNTDOWN HELP\n\n\
+                 F1     Menu\n\
+                 F2     Start/Pause\n\
+                 F3     Reset\n\
+                 F4     Back\n\n\
+                 Enter  Start timer\n\
+                 n      New timer\n\
+                 d      Delete timer\n\
+                 q      Back"
+            }
+            AppMode::CountdownRun => {
+                "COUNTDOWN HELP\n\n\
+                 F1     Menu\n\
+                 F2     Pause/Resume\n\
+                 F3     Reset\n\
+                 F4     Back to list\n\n\
+                 Enter  Pause/Resume\n\
+                 r      Reset\n\
+                 q      Back to list"
+            }
+            AppMode::Settings => {
+                "SETTINGS HELP\n\n\
+                 F1     Menu\n\
+                 F4     Back\n\n\
+                 Up/Dn  Move cursor\n\
+                 Enter  Toggle setting\n\
+                 q      Back"
+            }
         }
     }
 

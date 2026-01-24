@@ -6,6 +6,15 @@ A unified timer suite for the [Precursor](https://www.crowdsupply.com/sutajio-ko
 
 ## Features
 
+### Universal Keys
+
+| Key | Action |
+|-----|--------|
+| F1 | Menu / Help |
+| F4 | Exit / Back |
+| F2 | Start/Stop (in timer modes) |
+| F3 | Reset (in timer modes) |
+
 ### Pomodoro Timer
 
 Classic Pomodoro Technique timer with configurable work/break intervals.

@@ -25,6 +25,120 @@ pub fn clear_screen(gam: &Gam, content: Gid, screensize: Point) {
     .expect("can't clear");
 }
 
+pub fn draw_menu(
+    gam: &Gam,
+    content: Gid,
+    screensize: Point,
+    items: &[&str],
+    cursor: usize,
+) {
+    clear_screen(gam, content, screensize);
+
+    let mut title_tv = TextView::new(
+        content,
+        TextBounds::BoundingBox(Rectangle::new_coords(12, 12, screensize.x - 12, 40)),
+    );
+    title_tv.style = GlyphStyle::Bold;
+    title_tv.clear_area = true;
+    write!(title_tv.text, "MENU").unwrap();
+    gam.post_textview(&mut title_tv).expect("can't post title");
+
+    let line_height = 30;
+    let list_top = 52;
+
+    for (i, item) in items.iter().enumerate() {
+        let y = list_top + (i as isize) * line_height;
+        let marker = if i == cursor { "> " } else { "  " };
+
+        let mut tv = TextView::new(
+            content,
+            TextBounds::BoundingBox(Rectangle::new_coords(16, y, screensize.x - 16, y + line_height - 2)),
+        );
+        tv.style = GlyphStyle::Regular;
+        tv.clear_area = true;
+        write!(tv.text, "{}{}", marker, item).unwrap();
+        gam.post_textview(&mut tv).expect("can't post menu item");
+    }
+
+    let mut nav_tv = TextView::new(
+        content,
+        TextBounds::BoundingBox(Rectangle::new_coords(12, screensize.y - 40, screensize.x - 12, screensize.y - 10)),
+    );
+    nav_tv.style = GlyphStyle::Small;
+    nav_tv.clear_area = true;
+    write!(nav_tv.text, "arrows=select  ENTER=open  F4=close").unwrap();
+    gam.post_textview(&mut nav_tv).expect("can't post footer");
+
+    gam.redraw().expect("can't redraw");
+}
+
+pub fn draw_help(gam: &Gam, content: Gid, screensize: Point, help_text: &str) {
+    clear_screen(gam, content, screensize);
+
+    let line_height = 20;
+    let mut y = 16isize;
+
+    for line in help_text.lines() {
+        if y + line_height > screensize.y - 40 {
+            break;
+        }
+        let style = if y == 16 { GlyphStyle::Bold } else { GlyphStyle::Small };
+        let mut tv = TextView::new(
+            content,
+            TextBounds::BoundingBox(Rectangle::new_coords(16, y, screensize.x - 16, y + line_height - 2)),
+        );
+        tv.style = style;
+        tv.clear_area = true;
+        write!(tv.text, "{}", line).unwrap();
+        gam.post_textview(&mut tv).expect("can't post help line");
+        y += line_height;
+    }
+
+    let mut nav_tv = TextView::new(
+        content,
+        TextBounds::BoundingBox(Rectangle::new_coords(12, screensize.y - 30, screensize.x - 12, screensize.y - 8)),
+    );
+    nav_tv.style = GlyphStyle::Small;
+    nav_tv.clear_area = true;
+    write!(nav_tv.text, "Press any key to close").unwrap();
+    gam.post_textview(&mut nav_tv).expect("can't post footer");
+
+    gam.redraw().expect("can't redraw");
+}
+
+pub fn draw_confirm_exit(gam: &Gam, content: Gid, screensize: Point) {
+    clear_screen(gam, content, screensize);
+
+    let mut title_tv = TextView::new(
+        content,
+        TextBounds::BoundingBox(Rectangle::new_coords(12, 40, screensize.x - 12, 70)),
+    );
+    title_tv.style = GlyphStyle::Bold;
+    title_tv.clear_area = true;
+    write!(title_tv.text, "Timer Running").unwrap();
+    gam.post_textview(&mut title_tv).expect("can't post title");
+
+    let mut msg_tv = TextView::new(
+        content,
+        TextBounds::BoundingBox(Rectangle::new_coords(12, 90, screensize.x - 12, 150)),
+    );
+    msg_tv.style = GlyphStyle::Regular;
+    msg_tv.clear_area = true;
+    write!(msg_tv.text, "A timer is still running.\nExit anyway?").unwrap();
+    gam.post_textview(&mut msg_tv).expect("can't post message");
+
+    let mut nav_tv = TextView::new(
+        content,
+        TextBounds::BoundingBox(Rectangle::new_coords(12, 170, screensize.x - 12, 210)),
+    );
+    nav_tv.style = GlyphStyle::Regular;
+    nav_tv.clear_area = true;
+    write!(nav_tv.text, "  y = Stop & exit\n  n = Cancel\n  F4 = Cancel").unwrap();
+    gam.post_textview(&mut nav_tv).expect("can't post options");
+
+    gam.redraw().expect("can't redraw");
+}
+
 pub fn draw_mode_select(gam: &Gam, content: Gid, screensize: Point, cursor: usize) {
     clear_screen(gam, content, screensize);
 
@@ -61,7 +175,7 @@ pub fn draw_mode_select(gam: &Gam, content: Gid, screensize: Point, cursor: usiz
     );
     nav_tv.style = GlyphStyle::Small;
     nav_tv.clear_area = true;
-    write!(nav_tv.text, "arrows=select  ENTER=open  q=quit").unwrap();
+    write!(nav_tv.text, "F1=menu F4=quit  ENTER=open  s=settings").unwrap();
     gam.post_textview(&mut nav_tv).expect("can't post footer");
 
     gam.redraw().expect("can't redraw");
@@ -153,7 +267,7 @@ pub fn draw_pomodoro(gam: &Gam, content: Gid, screensize: Point, state: &Pomodor
     );
     nav_tv.style = GlyphStyle::Small;
     nav_tv.clear_area = true;
-    write!(nav_tv.text, "ENTER=start/pause  r=reset\ns=settings  q=back").unwrap();
+    write!(nav_tv.text, "F2=start/pause  F3=reset  F4=back\nF1=menu  s=settings").unwrap();
     gam.post_textview(&mut nav_tv).expect("can't post footer");
 
     gam.redraw().expect("can't redraw");
@@ -224,7 +338,7 @@ pub fn draw_stopwatch(gam: &Gam, content: Gid, screensize: Point, state: &Stopwa
     );
     nav_tv.style = GlyphStyle::Small;
     nav_tv.clear_area = true;
-    write!(nav_tv.text, "ENTER=start/pause  l=lap\nr=reset  q=back").unwrap();
+    write!(nav_tv.text, "F2=start/pause  F3=reset  F4=back\nF1=menu  l=lap").unwrap();
     gam.post_textview(&mut nav_tv).expect("can't post footer");
 
     gam.redraw().expect("can't redraw");
@@ -283,7 +397,7 @@ pub fn draw_countdown_list(gam: &Gam, content: Gid, screensize: Point, state: &C
     );
     nav_tv.style = GlyphStyle::Small;
     nav_tv.clear_area = true;
-    write!(nav_tv.text, "ENTER=start  n=new  d=delete\nq=back").unwrap();
+    write!(nav_tv.text, "F1=menu F4=back  ENTER=start\nn=new  d=delete").unwrap();
     gam.post_textview(&mut nav_tv).expect("can't post footer");
 
     gam.redraw().expect("can't redraw");
@@ -362,7 +476,7 @@ pub fn draw_countdown_running(gam: &Gam, content: Gid, screensize: Point, state:
     );
     nav_tv.style = GlyphStyle::Small;
     nav_tv.clear_area = true;
-    write!(nav_tv.text, "ENTER=pause/resume  r=reset\nq=back to list").unwrap();
+    write!(nav_tv.text, "F2=pause/resume  F3=reset\nF4=back  F1=menu").unwrap();
     gam.post_textview(&mut nav_tv).expect("can't post footer");
 
     gam.redraw().expect("can't redraw");
@@ -410,7 +524,7 @@ pub fn draw_settings(gam: &Gam, content: Gid, screensize: Point, config: &AlertC
     );
     nav_tv.style = GlyphStyle::Small;
     nav_tv.clear_area = true;
-    write!(nav_tv.text, "arrows=select  ENTER=toggle\nq=back").unwrap();
+    write!(nav_tv.text, "F1=menu F4=back  ENTER=toggle").unwrap();
     gam.post_textview(&mut nav_tv).expect("can't post footer");
 
     gam.redraw().expect("can't redraw");
