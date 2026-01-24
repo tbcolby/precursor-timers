@@ -176,6 +176,16 @@ cargo test -p timer-core
 cargo xtask renode-image timers
 ```
 
+## Development
+
+This app was developed using the methodology described in [xous-dev-toolkit](https://github.com/tbcolby/xous-dev-toolkit) — an LLM-assisted approach to Precursor app development on macOS ARM64.
+
+## Author
+
+Made by Tyler Colby — [Colby's Data Movers, LLC](https://colbysdatamovers.com)
+
+Contact: [tyler@colbysdatamovers.com](mailto:tyler@colbysdatamovers.com) | [GitHub Issues](https://github.com/tbcolby/precursor-timers/issues)
+
 ## License
 
 Licensed under the Apache License, Version 2.0.
