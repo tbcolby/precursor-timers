@@ -38,6 +38,23 @@ impl TimerStorage {
         }
     }
 
+    pub fn save_pomodoro_settings(&self, work: u64, short: u64, long: u64, cycles: u8) {
+        let mut data = [0u8; 25];
+        data[0..8].copy_from_slice(&work.to_le_bytes());
+        data[8..16].copy_from_slice(&short.to_le_bytes());
+        data[16..24].copy_from_slice(&long.to_le_bytes());
+        data[24] = cycles;
+
+        match self.pddb.get(DICT_NAME, KEY_POMODORO, None, true, true, Some(25), None::<fn()>) {
+            Ok(mut key) => {
+                key.seek(SeekFrom::Start(0)).ok();
+                key.write_all(&data).ok();
+                self.pddb.sync().ok();
+            }
+            Err(e) => log::error!("Failed to save pomodoro settings: {:?}", e),
+        }
+    }
+
     pub fn load_alert_config(&self) -> AlertConfig {
         match self.pddb.get(DICT_NAME, KEY_ALERTS, None, false, false, None, None::<fn()>) {
             Ok(mut key) => {

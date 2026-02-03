@@ -19,13 +19,15 @@ A unified timer suite for the [Precursor](https://www.crowdsupply.com/sutajio-ko
 
 Classic Pomodoro Technique timer with configurable work/break intervals.
 
-- **25-minute work sessions** (configurable via PDDB)
-- **5-minute short breaks** between sessions
-- **15-minute long break** after 4 cycles
+- **25-minute work sessions** (default, configurable)
+- **5-minute short breaks** between sessions (configurable)
+- **15-minute long break** after 4 cycles (configurable)
+- **Configure via Settings** — adjust all durations and cycle count
 - Auto-transitions between work and break phases
 - Progress bar showing time elapsed in current phase
 - Session counter tracking completed work sessions
 - Vibration and notification alerts on phase transitions
+- Settings persisted to PDDB
 
 ![Pomodoro](screenshots/pomodoro.png)
 
@@ -44,7 +46,7 @@ Precision stopwatch with centisecond display and lap recording.
 - **HH:MM:SS.cs** format (centisecond precision)
 - Display updates every 100ms while running
 - Record up to 99 laps (most recent shown first)
-- Scrollable lap list
+- **Scrollable lap list** — use Up/Down arrows to scroll through lap history
 - Lap times show individual split durations
 
 ![Stopwatch](screenshots/stopwatch.png)
@@ -54,6 +56,7 @@ Precision stopwatch with centisecond display and lap recording.
 |-----|--------|
 | Enter | Start / Pause |
 | l | Record lap (while running) |
+| Up/Down | Scroll through laps |
 | r | Reset (while stopped) |
 | q | Back to mode select |
 
@@ -93,7 +96,8 @@ Configure alert behavior for timer expirations.
 |---------|---------|-------------|
 | Vibration | ON | Device vibration on timer events |
 | Notification | ON | Modal notification popup |
-| Audio | OFF | Audio tone (requires codec) |
+| Audio | OFF | Audio tone (not implemented) |
+| Configure Pomodoro | — | Edit work/break durations and cycles |
 
 ## Installation
 
@@ -184,6 +188,19 @@ cargo test -p timer-core
 # Build for Renode emulation
 cargo xtask renode-image timers
 ```
+
+## Changelog
+
+### v0.2.0
+
+- **Pomodoro configuration** — configure work/break durations and cycle count via Settings
+- **Lap scroll** — use Up/Down arrows to scroll through stopwatch lap history
+- **Fixed F4 quit** — F4 at mode select now properly exits the app
+- **Pomodoro settings persistence** — custom durations saved to PDDB
+
+### v0.1.0
+
+- Initial release with Pomodoro, Stopwatch, and Countdown modes
 
 ## Development
 

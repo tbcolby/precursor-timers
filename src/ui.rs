@@ -494,16 +494,17 @@ pub fn draw_settings(gam: &Gam, content: Gid, screensize: Point, config: &AlertC
     write!(title_tv.text, "SETTINGS").unwrap();
     gam.post_textview(&mut title_tv).expect("can't post title");
 
-    let items = [
+    let line_height = 30;
+    let list_top = 60;
+
+    // Alert settings
+    let alert_items = [
         ("Vibration", config.vibration),
         ("Notification", config.notification),
         ("Audio", config.audio),
     ];
 
-    let line_height = 30;
-    let list_top = 60;
-
-    for (i, (label, enabled)) in items.iter().enumerate() {
+    for (i, (label, enabled)) in alert_items.iter().enumerate() {
         let y = list_top + (i as isize) * line_height;
         let marker = if i == cursor { "> " } else { "  " };
         let status = if *enabled { "[ON]" } else { "[OFF]" };
@@ -518,13 +519,25 @@ pub fn draw_settings(gam: &Gam, content: Gid, screensize: Point, config: &AlertC
         gam.post_textview(&mut tv).expect("can't post setting");
     }
 
+    // Configure Pomodoro option
+    let pom_y = list_top + 3 * line_height;
+    let pom_marker = if cursor == 3 { "> " } else { "  " };
+    let mut pom_tv = TextView::new(
+        content,
+        TextBounds::BoundingBox(Rectangle::new_coords(12, pom_y, screensize.x - 12, pom_y + line_height - 2)),
+    );
+    pom_tv.style = GlyphStyle::Regular;
+    pom_tv.clear_area = true;
+    write!(pom_tv.text, "{}Configure Pomodoro...", pom_marker).unwrap();
+    gam.post_textview(&mut pom_tv).expect("can't post pom setting");
+
     let mut nav_tv = TextView::new(
         content,
         TextBounds::BoundingBox(Rectangle::new_coords(12, screensize.y - 50, screensize.x - 12, screensize.y - 10)),
     );
     nav_tv.style = GlyphStyle::Small;
     nav_tv.clear_area = true;
-    write!(nav_tv.text, "F1=menu F4=back  ENTER=toggle").unwrap();
+    write!(nav_tv.text, "F1=menu F4=back  ENTER=toggle/edit").unwrap();
     gam.post_textview(&mut nav_tv).expect("can't post footer");
 
     gam.redraw().expect("can't redraw");

@@ -73,6 +73,7 @@ struct TimersApp {
     menu_cursor: usize,
     help_visible: bool,
     confirm_exit: bool,
+    should_quit: bool,
 }
 
 impl TimersApp {
@@ -138,6 +139,7 @@ impl TimersApp {
             menu_cursor: 0,
             help_visible: false,
             confirm_exit: false,
+            should_quit: false,
         }
     }
 
@@ -617,7 +619,8 @@ impl TimersApp {
                 self.redraw();
             }
             AppMode::ModeSelect => {
-                // Top level - quit
+                // Top level - quit the app
+                self.should_quit = true;
             }
         }
     }
@@ -652,6 +655,7 @@ impl TimersApp {
                  F4     Back\n\n\
                  Enter  Start/Pause\n\
                  l      Record lap\n\
+                 Up/Dn  Scroll laps\n\
                  r      Reset (stopped)\n\
                  q      Back"
             }
@@ -787,6 +791,20 @@ impl TimersApp {
                     self.redraw();
                 }
             }
+            '↑' | 'k' => {
+                // Scroll up through lap history (show older laps)
+                if self.stopwatch.lap_scroll_offset + 1 < self.stopwatch.laps.len() {
+                    self.stopwatch.lap_scroll_offset += 1;
+                    self.redraw();
+                }
+            }
+            '↓' | 'j' => {
+                // Scroll down through lap history (show newer laps)
+                if self.stopwatch.lap_scroll_offset > 0 {
+                    self.stopwatch.lap_scroll_offset -= 1;
+                    self.redraw();
+                }
+            }
             'q' => {
                 if self.stopwatch.timer.state == TimerState::Running {
                     self.stopwatch.timer.pause(now);
@@ -902,7 +920,7 @@ impl TimersApp {
                 }
             }
             '↓' | 'j' => {
-                if self.settings_cursor < 2 {
+                if self.settings_cursor < 3 {
                     self.settings_cursor += 1;
                     self.redraw();
                 }
@@ -912,6 +930,11 @@ impl TimersApp {
                     0 => self.alert_config.vibration = !self.alert_config.vibration,
                     1 => self.alert_config.notification = !self.alert_config.notification,
                     2 => self.alert_config.audio = !self.alert_config.audio,
+                    3 => {
+                        // Configure Pomodoro durations
+                        self.configure_pomodoro();
+                        return;
+                    }
                     _ => {}
                 }
                 self.storage.save_alert_config(&self.alert_config);
@@ -924,6 +947,70 @@ impl TimersApp {
             }
             _ => {}
         }
+    }
+
+    fn configure_pomodoro(&mut self) {
+        // Work duration
+        let work_mins = match self.modals.alert_builder("Work duration (mins):")
+            .field(Some(format!("{}", self.pomodoro.work_duration_ms / 60000)), None)
+            .build()
+        {
+            Ok(response) => {
+                let payload = response.first();
+                payload.content.trim().parse::<u64>().unwrap_or(25)
+            }
+            Err(_) => return,
+        };
+
+        // Short break duration
+        let short_mins = match self.modals.alert_builder("Short break (mins):")
+            .field(Some(format!("{}", self.pomodoro.short_break_ms / 60000)), None)
+            .build()
+        {
+            Ok(response) => {
+                let payload = response.first();
+                payload.content.trim().parse::<u64>().unwrap_or(5)
+            }
+            Err(_) => return,
+        };
+
+        // Long break duration
+        let long_mins = match self.modals.alert_builder("Long break (mins):")
+            .field(Some(format!("{}", self.pomodoro.long_break_ms / 60000)), None)
+            .build()
+        {
+            Ok(response) => {
+                let payload = response.first();
+                payload.content.trim().parse::<u64>().unwrap_or(15)
+            }
+            Err(_) => return,
+        };
+
+        // Cycles before long break
+        let cycles = match self.modals.alert_builder("Cycles before long break:")
+            .field(Some(format!("{}", self.pomodoro.cycles_before_long)), None)
+            .build()
+        {
+            Ok(response) => {
+                let payload = response.first();
+                payload.content.trim().parse::<u8>().unwrap_or(4)
+            }
+            Err(_) => return,
+        };
+
+        // Apply and save settings
+        let work_ms = work_mins * 60 * 1000;
+        let short_ms = short_mins * 60 * 1000;
+        let long_ms = long_mins * 60 * 1000;
+
+        self.pomodoro.work_duration_ms = work_ms;
+        self.pomodoro.short_break_ms = short_ms;
+        self.pomodoro.long_break_ms = long_ms;
+        self.pomodoro.cycles_before_long = cycles;
+        self.pomodoro.reset();
+
+        self.storage.save_pomodoro_settings(work_ms, short_ms, long_ms, cycles);
+        self.redraw();
     }
 
     fn create_new_countdown(&mut self) {
@@ -1070,6 +1157,10 @@ fn main() -> ! {
                     if key != '\u{0000}' {
                         app.handle_key(key);
                     }
+                }
+                // Check if quit was requested
+                if app.should_quit {
+                    break;
                 }
             }),
             Some(AppOp::FocusChange) => xous::msg_scalar_unpack!(msg, new_state_code, _, _, _, {
