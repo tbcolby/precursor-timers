@@ -1,0 +1,11 @@
+{
+    "timers": {
+        "context_name": "Timers",
+        "menu_name": {
+            "appmenu.timers": {
+                "en": "Timers",
+                "en-tts": "Timers"
+            }
+        }
+    }
+}

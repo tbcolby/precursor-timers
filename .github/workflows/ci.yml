@@ -1,0 +1,5 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  check:
+    uses: tbcolby/xous-dev-toolkit/.github/workflows/app-check.yml@main
